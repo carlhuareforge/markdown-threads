@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { SidecarFile, CommentThread, CommentEntry, CommentAnchor } from './models/types';
+import type { SidecarFile, CommentThread, CommentEntry } from './models/types';
 import { v4 as uuidv4 } from 'uuid';
 
 /** Origin tag so listeners can ignore their own writes. */
@@ -46,7 +46,7 @@ export class SidecarManager {
    */
   async readSidecar(docPath: string): Promise<SidecarFile | null> {
     const sidecarPath = this.getSidecarPath(docPath);
-    
+
     if (!fs.existsSync(sidecarPath)) {
       return null;
     }
@@ -95,7 +95,7 @@ export class SidecarManager {
   createEmptySidecar(docName: string): SidecarFile {
     return {
       doc: docName,
-      version: '1.0',
+      version: '2.0',
       comments: [],
     };
   }
@@ -126,8 +126,6 @@ export class SidecarManager {
       id: uuidv4(),
     };
     thread.thread.push(newEntry);
-    // Mark thread as draft since it has unpublished changes
-    thread.isDraft = true;
     return newEntry;
   }
 
@@ -144,17 +142,15 @@ export class SidecarManager {
   }
 
   /**
-   * Delete a single comment entry from a thread by index.
+   * Delete a single comment entry from a thread by ID.
    * If it was the last comment, removes the entire thread.
-   * Returns true if something was deleted.
    */
-  deleteComment(sidecar: SidecarFile, threadId: string, commentIndex: number): boolean {
+  deleteCommentById(sidecar: SidecarFile, threadId: string, commentId: string): boolean {
     const thread = sidecar.comments.find(t => t.id === threadId);
-    if (!thread || commentIndex < 0 || commentIndex >= thread.thread.length) {
-      return false;
-    }
-    thread.thread.splice(commentIndex, 1);
-    // If that was the last comment, remove the entire thread
+    if (!thread) { return false; }
+    const idx = thread.thread.findIndex(c => c.id === commentId);
+    if (idx === -1) { return false; }
+    thread.thread.splice(idx, 1);
     if (thread.thread.length === 0) {
       this.deleteThread(sidecar, threadId);
     }
@@ -162,48 +158,14 @@ export class SidecarManager {
   }
 
   /**
-   * Delete a single comment entry from a thread by comment ID.
-   * If it was the last comment, removes the entire thread.
-   * Returns true if something was deleted.
-   */
-  deleteCommentById(sidecar: SidecarFile, threadId: string, commentId: string): boolean {
-    const thread = sidecar.comments.find(t => t.id === threadId);
-    if (!thread) { return false; }
-    const idx = thread.thread.findIndex(c => c.id === commentId);
-    if (idx === -1) { return false; }
-    return this.deleteComment(sidecar, threadId, idx);
-  }
-
-  /**
    * Edit the body of an existing comment entry.
-   * Sets the `edited` timestamp. Returns the updated entry or null.
    */
-  /**
-   * Toggle a thumbs-up reaction on a comment. Returns true if added, false if removed.
-   */
-  toggleReaction(sidecar: SidecarFile, threadId: string, commentId: string, author: string): boolean {
-    const thread = sidecar.comments.find(t => t.id === threadId);
-    if (!thread) { return false; }
-    const comment = thread.thread.find(c => c.id === commentId);
-    if (!comment) { return false; }
-    if (!comment.reactions) { comment.reactions = []; }
-    const idx = comment.reactions.indexOf(author);
-    if (idx === -1) {
-      comment.reactions.push(author);
-      return true;
-    } else {
-      comment.reactions.splice(idx, 1);
-      return false;
-    }
-  }
-
   editComment(sidecar: SidecarFile, threadId: string, commentId: string, newBody: string): CommentEntry | null {
     const thread = sidecar.comments.find(t => t.id === threadId);
     if (!thread) { return null; }
     const entry = thread.thread.find(c => c.id === commentId);
     if (!entry) { return null; }
     entry.body = newBody;
-    entry.edited = new Date().toISOString();
     return entry;
   }
 
@@ -216,39 +178,6 @@ export class SidecarManager {
       return false;
     }
     thread.status = status;
-    // Mark thread as draft since it has unpublished changes
-    thread.isDraft = true;
-    return true;
-  }
-
-  /**
-   * Get all draft (unpublished) threads
-   */
-  getDraftThreads(sidecar: SidecarFile): CommentThread[] {
-    return sidecar.comments.filter(t => t.isDraft);
-  }
-
-  /**
-   * Mark all draft threads as published
-   */
-  markAllPublished(sidecar: SidecarFile): void {
-    sidecar.comments.forEach(t => {
-      t.isDraft = false;
-    });
-  }
-
-  /**
-   * Reparent a thread to a new section anchor.
-   * Used when a heading is renamed but the section still exists.
-   */
-  reparentThread(sidecar: SidecarFile, threadId: string, newAnchor: CommentAnchor): boolean {
-    const thread = sidecar.comments.find(t => t.id === threadId);
-    if (!thread) {
-      return false;
-    }
-    thread.anchor = newAnchor;
-    thread.status = 'open'; // Clear stale/orphaned status
-    thread.isDraft = true;  // Mark as draft since anchor changed
     return true;
   }
 
@@ -259,19 +188,19 @@ export class SidecarManager {
     if (!data || typeof data !== 'object') {
       return false;
     }
-    
+
     const sidecar = data as Record<string, unknown>;
-    
+
     if (typeof sidecar.doc !== 'string') {
       return false;
     }
-    if (sidecar.version !== '1.0') {
+    if (sidecar.version !== '2.0') {
       return false;
     }
     if (!Array.isArray(sidecar.comments)) {
       return false;
     }
-    
+
     return true;
   }
 }

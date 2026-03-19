@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { MarkdownSection, CommentAnchor, CommentThread } from './models/types';
-import { parseMarkdownSections, findSectionBySlug, findSectionByLine, hasContentDrifted } from './utils/markdown';
+import type { MarkdownSection, CommentAnchor } from './models/types';
+import { parseMarkdownSections, findSectionBySlug, findSectionByLine } from './utils/markdown';
 
 /**
  * Engine for anchoring comments to markdown sections
@@ -42,26 +42,18 @@ export class AnchorEngine {
   createAnchor(section: MarkdownSection): CommentAnchor {
     return {
       sectionSlug: section.slug,
-      contentHash: section.contentHash,
       lineHint: section.startLine,
     };
   }
 
   /**
-   * Find the section matching an anchor
+   * Find the section matching an anchor by slug
    */
   findAnchoredSection(
     sections: MarkdownSection[],
     anchor: CommentAnchor
-  ): { section: MarkdownSection; isStale: boolean } | null {
-    const section = findSectionBySlug(sections, anchor.sectionSlug);
-    
-    if (!section) {
-      return null;
-    }
-
-    const isStale = hasContentDrifted(section, anchor.contentHash);
-    return { section, isStale };
+  ): MarkdownSection | null {
+    return findSectionBySlug(sections, anchor.sectionSlug) ?? null;
   }
 
   /**
@@ -76,8 +68,6 @@ export class AnchorEngine {
 
   /**
    * Get the VS Code Range covering the full body of a section
-   * (from heading through last content line).
-   * Used for commenting-range provider so the "+" icon appears on any line.
    */
   getSectionBodyRange(document: vscode.TextDocument, section: MarkdownSection): vscode.Range {
     const lastLine = Math.min(section.endLine - 1, document.lineCount - 1);
@@ -92,68 +82,6 @@ export class AnchorEngine {
    */
   findSectionByLine(sections: MarkdownSection[], line: number): MarkdownSection | undefined {
     return findSectionByLine(sections, line);
-  }
-
-  /**
-   * Check if any threads have become stale
-   */
-  detectStaleThreads(
-    sections: MarkdownSection[],
-    threads: CommentThread[]
-  ): { thread: CommentThread; newStatus: 'stale' | 'open' }[] {
-    const updates: { thread: CommentThread; newStatus: 'stale' | 'open' }[] = [];
-
-    for (const thread of threads) {
-      if (thread.status === 'resolved') {
-        continue; // Don't change resolved threads
-      }
-
-      const result = this.findAnchoredSection(sections, thread.anchor);
-      
-      if (!result) {
-        // Section no longer exists - mark as stale
-        if (thread.status !== 'stale') {
-          updates.push({ thread, newStatus: 'stale' });
-        }
-      } else if (result.isStale && thread.status !== 'stale') {
-        // Content has drifted
-        updates.push({ thread, newStatus: 'stale' });
-      } else if (!result.isStale && thread.status === 'stale') {
-        // Content matches again (maybe user reverted changes)
-        updates.push({ thread, newStatus: 'open' });
-      }
-    }
-
-    return updates;
-  }
-
-  /**
-   * Find a candidate section to reparent an orphaned thread to.
-   * Used when a heading is renamed but the section is still at the same location.
-   * 
-   * Priority:
-   * 1. lineHint matches a section's startLine (heading renamed, same location)
-   * 2. contentHash matches (heading renamed, body unchanged)
-   * 
-   * Returns null if no suitable candidate is found.
-   */
-  findReparentCandidate(
-    sections: MarkdownSection[],
-    anchor: CommentAnchor
-  ): MarkdownSection | null {
-    // Priority 1: lineHint matches a section's startLine
-    const byLine = sections.find(s => s.startLine === anchor.lineHint);
-    if (byLine) {
-      return byLine;
-    }
-
-    // Priority 2: contentHash matches (body is same, heading changed)
-    const byHash = sections.find(s => s.contentHash === anchor.contentHash);
-    if (byHash) {
-      return byHash;
-    }
-
-    return null;
   }
 }
 

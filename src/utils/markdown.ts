@@ -1,5 +1,5 @@
 import type { MarkdownSection } from '../models/types';
-import { computeContentHash, slugify } from './hash';
+import { slugify } from './hash';
 
 /**
  * Parse a markdown document and extract sections by heading
@@ -40,7 +40,6 @@ export function parseMarkdownSections(content: string): MarkdownSection[] {
           startLine: currentSection.startLine!,
           endLine: i,
           content: sectionContent,
-          contentHash: computeContentHash(sectionContent),
         });
       }
 
@@ -69,7 +68,6 @@ export function parseMarkdownSections(content: string): MarkdownSection[] {
       startLine: currentSection.startLine!,
       endLine: lines.length,
       content: sectionContent,
-      contentHash: computeContentHash(sectionContent),
     });
   }
 
@@ -91,9 +89,3 @@ export function findSectionByLine(sections: MarkdownSection[], line: number): Ma
   return sections.find(s => line >= s.startLine && line < s.endLine);
 }
 
-/**
- * Check if a section's content hash has drifted from the stored hash
- */
-export function hasContentDrifted(section: MarkdownSection, storedHash: string): boolean {
-  return section.contentHash !== storedHash;
-}

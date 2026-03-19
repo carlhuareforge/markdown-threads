@@ -6,30 +6,26 @@
 export interface CommentAnchor {
   /** Slug derived from the section heading (e.g., "authentication-flow") */
   sectionSlug: string;
-  /** SHA256 hash of the first 200 characters of the section content */
-  contentHash: string;
-  /** Line number hint for faster location (may drift) */
+  /** 0-indexed line number in the source .md file */
   lineHint: number;
+  /** The text the user highlighted when creating this comment */
+  selectedText?: string;
 }
 
 /** A single comment entry within a thread */
 export interface CommentEntry {
   /** Unique identifier (UUID) */
   id: string;
-  /** Author email (from git config) */
+  /** Author name or identifier */
   author: string;
   /** Comment body text (markdown supported) */
   body: string;
   /** ISO-8601 timestamp when created */
   created: string;
-  /** ISO-8601 timestamp when last edited, or null */
-  edited: string | null;
-  /** Thumbs-up reactions — array of author names who reacted */
-  reactions?: string[];
 }
 
 /** Status of a comment thread */
-export type ThreadStatus = 'open' | 'resolved' | 'stale';
+export type ThreadStatus = 'open' | 'resolved';
 
 /** A comment thread anchored to a document section */
 export interface CommentThread {
@@ -39,8 +35,6 @@ export interface CommentThread {
   anchor: CommentAnchor;
   /** Current status of the thread */
   status: ThreadStatus;
-  /** Whether this is a draft (not yet published to PR) */
-  isDraft: boolean;
   /** All comments in this thread */
   thread: CommentEntry[];
 }
@@ -49,8 +43,8 @@ export interface CommentThread {
 export interface SidecarFile {
   /** Name of the markdown document this file is for */
   doc: string;
-  /** Schema version for future compatibility */
-  version: '1.0';
+  /** Schema version */
+  version: '2.0';
   /** All comment threads for this document */
   comments: CommentThread[];
 }
@@ -69,8 +63,6 @@ export interface MarkdownSection {
   endLine: number;
   /** Content of the section (excluding heading) */
   content: string;
-  /** Hash of first 200 chars of content */
-  contentHash: string;
 }
 
 /** Git provider type */

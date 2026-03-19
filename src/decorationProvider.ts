@@ -9,7 +9,6 @@ import { anchorEngine } from './anchorEngine';
 export class DecorationProvider implements vscode.Disposable {
   private openDecoration: vscode.TextEditorDecorationType;
   private resolvedDecoration: vscode.TextEditorDecorationType;
-  private staleDecoration: vscode.TextEditorDecorationType;
   private disposables: vscode.Disposable[] = [];
 
   constructor(extensionPath: string) {
@@ -23,15 +22,9 @@ export class DecorationProvider implements vscode.Disposable {
       gutterIconSize: 'contain',
     });
 
-    this.staleDecoration = vscode.window.createTextEditorDecorationType({
-      gutterIconPath: path.join(extensionPath, 'media', 'comment-stale.svg'),
-      gutterIconSize: 'contain',
-    });
-
     this.disposables.push(
       this.openDecoration,
-      this.resolvedDecoration,
-      this.staleDecoration
+      this.resolvedDecoration
     );
   }
 
@@ -61,19 +54,18 @@ export class DecorationProvider implements vscode.Disposable {
     
     const openRanges: vscode.DecorationOptions[] = [];
     const resolvedRanges: vscode.DecorationOptions[] = [];
-    const staleRanges: vscode.DecorationOptions[] = [];
 
     for (const thread of sidecar.comments) {
-      const result = anchorEngine.findAnchoredSection(sections, thread.anchor);
-      if (!result) {
+      const section = anchorEngine.findAnchoredSection(sections, thread.anchor);
+      if (!section) {
         continue;
       }
 
-      const range = anchorEngine.getSectionRange(document, result.section);
+      const range = anchorEngine.getSectionRange(document, section);
       const threadCount = thread.thread.length;
       const firstComment = thread.thread[0]?.body ?? '';
-      const preview = firstComment.length > 50 
-        ? firstComment.substring(0, 50) + '...' 
+      const preview = firstComment.length > 50
+        ? firstComment.substring(0, 50) + '...'
         : firstComment;
 
       const decoration: vscode.DecorationOptions = {
@@ -83,9 +75,7 @@ export class DecorationProvider implements vscode.Disposable {
         ),
       };
 
-      if (result.isStale || thread.status === 'stale') {
-        staleRanges.push(decoration);
-      } else if (thread.status === 'resolved') {
+      if (thread.status === 'resolved') {
         resolvedRanges.push(decoration);
       } else {
         openRanges.push(decoration);
@@ -94,7 +84,6 @@ export class DecorationProvider implements vscode.Disposable {
 
     editor.setDecorations(this.openDecoration, openRanges);
     editor.setDecorations(this.resolvedDecoration, resolvedRanges);
-    editor.setDecorations(this.staleDecoration, staleRanges);
   }
 
   /**
@@ -103,7 +92,6 @@ export class DecorationProvider implements vscode.Disposable {
   clearDecorations(editor: vscode.TextEditor): void {
     editor.setDecorations(this.openDecoration, []);
     editor.setDecorations(this.resolvedDecoration, []);
-    editor.setDecorations(this.staleDecoration, []);
   }
 
   /**
